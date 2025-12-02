@@ -1,0 +1,60 @@
+# 睡觉提醒 GitHub Action
+# 使用 Bark 推送通知提醒睡觉
+
+name: Sleep Reminder
+
+# 时间配置说明：
+# 本地时间 23:30 (UTC+8 东八区)
+# UTC 时间 = 本地时间 - 8 = 15:30
+# cron 格式: 分 时 日 月 周
+
+on:
+  schedule:
+    - cron: '30 15 * * *'
+  # 手动触发（用于测试）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 检出代码以读取消息文件
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Send Bark Notification
+        run: |
+          # Bark 推送参数
+          BARK_SERVER="${{ secrets.BARK_SERVER }}"
+          BARK_KEY="${{ secrets.BARK_KEY }}"
+          TITLE="${{ secrets.SLEEP_REMINDER_TITLE }}"
+          
+          # 设置默认值
+          BARK_SERVER=${BARK_SERVER:-"https://api.day.app"}
+          TITLE=${TITLE:-"该睡觉啦"}
+          
+          # 从文件中随机选择一句话（排除注释和空行）
+          MESSAGE_FILE="messages/sleep_reminder.txt"
+          if [ -f "$MESSAGE_FILE" ]; then
+            BODY=$(grep -v '^#' "$MESSAGE_FILE" | grep -v '^$' | shuf -n 1)
+          fi
+          # 如果文件不存在或为空，使用默认值
+          BODY=${BODY:-"早睡早起身体好，明天还要努力工作呢！"}
+          
+          # 构建推送 URL
+          # 使用 URL 编码处理中文
+          ENCODED_TITLE=$(echo -n "$TITLE" | jq -sRr @uri)
+          ENCODED_BODY=$(echo -n "$BODY" | jq -sRr @uri)
+          
+          # 发送 Bark 通知
+          # 添加图标和声音
+          BARK_URL="${BARK_SERVER}/${BARK_KEY}/${ENCODED_TITLE}/${ENCODED_BODY}?sound=minuet&icon=https://raw.githubusercontent.com/Finb/Bark/master/Bark/AppIcon/Bark-AppIcon-iOS.png"
+          
+          # 发送请求
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BARK_URL")
+          
+          # 检查响应
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            exit 1
+          fi

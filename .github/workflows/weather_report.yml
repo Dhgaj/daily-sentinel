@@ -1,0 +1,82 @@
+# 天气预报 GitHub Action
+# 每天早上推送当日天气（使用 wttr.in 免费API，无需注册）
+
+name: Weather Report
+
+# 时间配置说明：
+# 本地时间 07:30 (UTC+8 东八区)
+# UTC 时间 = 本地时间 - 8 = 23:30 (前一天)
+# cron 格式: 分 时 日 月 周
+
+on:
+  schedule:
+    - cron: '30 23 * * *'
+  # 手动触发（用于测试）
+  workflow_dispatch:
+
+jobs:
+  send-weather:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get Weather and Send Notification
+        run: |
+          # 配置参数（城市名支持中文，可精确到区，如：深圳南山、广州天河、北京朝阳）
+          LOCATION="${{ secrets.WEATHER_LOCATION }}"
+          BARK_SERVER="${{ secrets.BARK_SERVER }}"
+          BARK_KEY="${{ secrets.BARK_KEY }}"
+          
+          # 设置默认值
+          BARK_SERVER=${BARK_SERVER:-"https://api.day.app"}
+          LOCATION=${LOCATION:-"深圳"}
+          
+          # 获取天气数据（wttr.in 免费 API）
+          WEATHER_DATA=$(curl -s "https://wttr.in/${LOCATION}?format=j1&lang=zh")
+          
+          # 检查是否获取成功
+          if [ -z "$WEATHER_DATA" ] || echo "$WEATHER_DATA" | grep -q "Unknown location"; then
+            exit 1
+          fi
+          
+          # 解析地区信息
+          AREA=$(echo "$WEATHER_DATA" | jq -r '.nearest_area[0].areaName[0].value // empty')
+          REGION=$(echo "$WEATHER_DATA" | jq -r '.nearest_area[0].region[0].value // empty')
+          COUNTRY=$(echo "$WEATHER_DATA" | jq -r '.nearest_area[0].country[0].value // empty')
+          
+          # 解析当前天气
+          TEMP_NOW=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].temp_C')
+          FEELS_LIKE=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].FeelsLikeC')
+          HUMIDITY=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].humidity')
+          WEATHER_DESC=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].lang_zh[0].value // .current_condition[0].weatherDesc[0].value')
+          WIND_DIR=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].winddir16Point')
+          WIND_SPEED=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].windspeedKmph')
+          UV_INDEX=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].uvIndex')
+          VISIBILITY=$(echo "$WEATHER_DATA" | jq -r '.current_condition[0].visibility')
+          
+          # 解析今日预报
+          TEMP_MAX=$(echo "$WEATHER_DATA" | jq -r '.weather[0].maxtempC')
+          TEMP_MIN=$(echo "$WEATHER_DATA" | jq -r '.weather[0].mintempC')
+          SUNRISE=$(echo "$WEATHER_DATA" | jq -r '.weather[0].astronomy[0].sunrise')
+          SUNSET=$(echo "$WEATHER_DATA" | jq -r '.weather[0].astronomy[0].sunset')
+          RAIN_CHANCE=$(echo "$WEATHER_DATA" | jq -r '.weather[0].hourly[4].chanceofrain')
+          
+          # 构建消息标题
+          TITLE="${LOCATION} - ${WEATHER_DESC} ${TEMP_NOW}°C"
+          
+          # 构建详细消息内容
+          BODY="当前${TEMP_NOW}°C (体感${FEELS_LIKE}°C) | 今日${TEMP_MIN}~${TEMP_MAX}°C | 降雨概率${RAIN_CHANCE}% | 风速${WIND_SPEED}km/h | 湿度${HUMIDITY}% | 紫外线${UV_INDEX} | 能见度${VISIBILITY}km | 日出${SUNRISE} 日落${SUNSET}"
+          
+          # URL 编码
+          ENCODED_TITLE=$(echo -n "$TITLE" | jq -sRr @uri)
+          ENCODED_BODY=$(echo -n "$BODY" | jq -sRr @uri)
+          
+          # 发送 Bark 通知
+          BARK_URL="${BARK_SERVER}/${BARK_KEY}/${ENCODED_TITLE}/${ENCODED_BODY}?sound=chime"
+          
+          # 发送请求
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BARK_URL")
+          
+          # 检查响应
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            exit 1
+          fi

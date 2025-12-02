@@ -1,0 +1,139 @@
+# 纪念日提醒 GitHub Action
+# 支持农历和新历，提前 N 天提醒
+
+name: Anniversary Reminder
+
+# 时间配置说明：
+# 本地时间 08:00 (UTC+8 东八区)
+# UTC 时间 = 本地时间 - 8 = 00:00 UTC
+# cron 格式: 分 时 日 月 周
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  # 手动触发（用于测试）
+  workflow_dispatch:
+
+jobs:
+  check-anniversary:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm install lunar-javascript
+      
+      - name: Check anniversaries and send notification
+        env:
+          ANNIVERSARIES: ${{ secrets.ANNIVERSARIES }}
+          BARK_SERVER: ${{ secrets.BARK_SERVER }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+        run: |
+          node << 'EOF'
+          const { Lunar, Solar } = require('lunar-javascript');
+          
+          // 获取配置
+          const anniversariesJson = process.env.ANNIVERSARIES;
+          // 去掉末尾斜杠
+          const barkServer = (process.env.BARK_SERVER || 'https://api.day.app').replace(/\/+$/, '');
+          const barkKey = (process.env.BARK_KEY || '').replace(/\/+$/, '');
+          
+          if (!anniversariesJson) {
+            process.exit(0);
+          }
+          
+          if (!barkKey) {
+            process.exit(1);
+          }
+          
+          // 解析配置
+          let anniversaries;
+          try {
+            anniversaries = JSON.parse(anniversariesJson);
+          } catch (e) {
+            process.exit(1);
+          }
+          
+          // 获取今天日期
+          const today = Solar.fromDate(new Date());
+          const todayLunar = today.getLunar();
+          
+          // 日期检查
+          
+          // 检查每个纪念日
+          const reminders = [];
+          
+          for (const item of anniversaries) {
+            const { name, date, type, advance = 3 } = item;
+            const [year, month, day] = date.split('-').map(Number);
+            
+            // 计算今年的纪念日日期（新历）
+            let anniversarySolar;
+            
+            if (type === 'lunar') {
+              // 农历转新历（使用今年）
+              try {
+                const lunarDate = Lunar.fromYmd(today.getYear(), month, day);
+                anniversarySolar = lunarDate.getSolar();
+              } catch (e) {
+                // 跳过无效日期
+                continue;
+              }
+            } else {
+              // 新历
+              anniversarySolar = Solar.fromYmd(today.getYear(), month, day);
+            }
+            
+            // 计算距离天数
+            const diffDays = anniversarySolar.subtract(today);
+            
+            // 检查纪念日...
+            
+            // 判断是否需要提醒（提前 advance 天内，包括当天）
+            if (diffDays >= 0 && diffDays <= advance) {
+              let message;
+              if (diffDays === 0) {
+                message = `今天是${name}！`;
+              } else if (diffDays === 1) {
+                message = `明天是${name}`;
+              } else {
+                message = `还有${diffDays}天是${name}`;
+              }
+              
+              if (type === 'lunar') {
+                message += ` (农历${month}月${day}日)`;
+              }
+              
+              reminders.push({ name, message, diffDays });
+            }
+          }
+          
+          // 发送提醒
+          if (reminders.length === 0) {
+            process.exit(0);
+          }
+          
+          // 按天数排序
+          reminders.sort((a, b) => a.diffDays - b.diffDays);
+          
+          const title = '纪念日提醒';
+          const body = reminders.map(r => r.message).join(' | ');
+          
+          // 发送 Bark 通知
+          const url = `${barkServer}/${barkKey}/${encodeURIComponent(title)}/${encodeURIComponent(body)}?sound=chime`;
+          
+          fetch(url)
+            .then(res => res.json())
+            .then(data => {
+              if (data.code !== 200) {
+                process.exit(1);
+              }
+            })
+            .catch(() => {
+              process.exit(1);
+            });
+          EOF

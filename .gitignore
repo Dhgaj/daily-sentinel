@@ -1,0 +1,34 @@
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# Node.js
+node_modules/
+
+# 报告
+report/
