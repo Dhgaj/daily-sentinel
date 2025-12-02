@@ -1,17 +1,9 @@
-# Changelog
+#  (2025-12-02)
 
-## 1.0.0 (2025-12-02)
 
 ### Features
 
-* 添加睡觉提醒功能，支持随机话语
-* 添加天气预报功能，使用 wttr.in 免费 API
-* 添加纪念日提醒功能，支持农历/新历，提前 N 天提醒
-* 添加每日一言功能，使用一言 API 推送名言/诗词/影视台词
-* 添加 CHANGELOG 自动生成工作流
-* 添加 GitHub 提交提醒功能，每晚检查今日提交
+* 添加每日一言 + GitHub提交提醒 + CHANGELOG自动生成 ([0d8116b](https://github.com/Dhgaj/daily-sentinel/commit/0d8116b72a1665aee6874065aa498ab0cfd2b3b8))
 
-### Security
 
-* 移除日志中的敏感信息输出
-* 使用 GitHub Secrets 保护密钥配置
+
