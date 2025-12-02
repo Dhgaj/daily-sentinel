@@ -1,0 +1,54 @@
+# 自动生成 CHANGELOG GitHub Action
+# 基于 commit 信息生成变更日志
+
+name: Generate Changelog
+
+on:
+  # 推送到 main 分支时触发
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'CHANGELOG.md'
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install conventional-changelog
+        run: npm install -g conventional-changelog-cli
+      
+      - name: Generate CHANGELOG
+        run: |
+          # 生成完整的 CHANGELOG
+          conventional-changelog -p angular -i CHANGELOG.md -s -r 0
+      
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查是否有变更
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to CHANGELOG"
+          else
+            git add CHANGELOG.md
+            git commit -m "docs: 更新 CHANGELOG"
+            git push origin HEAD:main
+          fi
+      
+      - name: Done
+        run: echo "Done"

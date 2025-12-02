@@ -80,3 +80,6 @@ jobs:
           if [ "$HTTP_CODE" -ne 200 ]; then
             exit 1
           fi
+      
+      - name: Done
+        run: echo "Done"

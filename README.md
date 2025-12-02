@@ -4,9 +4,13 @@
 
 ## 功能
 
-- **睡觉提醒**：每天 23:30 提醒睡觉，支持随机话语
-- **天气预报**：每天 07:30 推送当日天气（使用 wttr.in 免费 API）
-- **纪念日提醒**：每天 08:00 检查，支持农历/新历，提前 N 天提醒
+| 功能 | 时间 | 说明 |
+|------|------|------|
+| 💤 睡觉提醒 | 23:30 | 每晚提醒睡觉，支持随机话语 |
+| ☀️ 天气预报 | 07:30 | 推送当日天气（wttr.in 免费 API） |
+| 🎂 纪念日提醒 | 08:00 | 支持农历/新历，提前 N 天提醒 |
+| 📝 每日一言 | 09:00 | 推送名言/诗词/影视台词（一言 API） |
+| 🐱 GitHub 提醒 | 21:30 | 今天没有提交代码则提醒 |
 
 ## 配置
 
@@ -91,16 +95,46 @@ curl "https://wttr.in/广州?lang=zh"
 
 ```
 daily-sentinel/
-├── .github/workflows/          # GitHub Actions 工作流
-│   ├── sleep_reminder.yml      # 睡觉提醒
-│   ├── weather_report.yml      # 天气预报
-│   └── anniversary_reminder.yml # 纪念日提醒
-├── messages/                   # 提醒话语文件
-│   └── sleep_reminder.txt      # 睡觉提醒话语
+├── .github/workflows/            # GitHub Actions 工作流
+│   ├── sleep_reminder.yml        # 睡觉提醒
+│   ├── weather_report.yml        # 天气预报
+│   ├── anniversary_reminder.yml  # 纪念日提醒
+│   ├── daily_quote.yml           # 每日一言
+│   ├── github_reminder.yml       # GitHub 提交提醒
+│   └── changelog.yml             # 自动生成 CHANGELOG
+├── messages/                     # 提醒话语文件
+│   └── sleep_reminder.txt        # 睡觉提醒话语
 ├── .gitignore
 ├── LICENSE
 └── README.md
 ```
+
+## 常见问题
+
+### 为什么收不到推送？
+
+1. 检查 Secrets 是否配置正确
+2. 查看 Actions 运行日志是否成功
+3. 确认 Bark App 是否正常运行
+
+### 时间不对？
+
+GitHub Actions 使用 UTC 时间，北京时间需要 **-8 小时**。
+
+例如：本地 08:00 = UTC 00:00，cron 应设为 `0 0 * * *`
+
+### 如何修改每日一言的内容类型？
+
+编辑 `daily_quote.yml` 中的 API 参数 `c=`：
+
+- `a` 动画
+- `b` 漫画
+- `c` 游戏
+- `d` 文学
+- `h` 影视
+- `i` 诗词
+- `k` 哲学
+- `l` 抗机灵
 
 ## License
 

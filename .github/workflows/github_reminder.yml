@@ -1,0 +1,73 @@
+# GitHub 提交提醒 GitHub Action
+# 每晚检查今天是否有提交，没有则提醒
+
+name: GitHub Commit Reminder
+
+# 时间配置说明：
+# 本地时间 21:30 (UTC+8 东八区)
+# UTC 时间 = 本地时间 - 8 = 13:30
+# cron 格式: 分 时 日 月 周
+
+on:
+  schedule:
+    - cron: '30 13 * * *'
+  # 手动触发（用于测试）
+  workflow_dispatch:
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check today commits and send reminder
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BARK_SERVER: ${{ secrets.BARK_SERVER }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+        run: |
+          # 设置默认值
+          BARK_SERVER=${BARK_SERVER:-"https://api.day.app"}
+          
+          # 获取今天日期 (UTC+8)
+          TODAY=$(TZ='Asia/Shanghai' date +%Y-%m-%d)
+          
+          # 如果没有配置用户名，使用仓库所有者
+          if [ -z "$GH_USERNAME" ]; then
+            GH_USERNAME="${{ github.repository_owner }}"
+          fi
+          
+          # 查询今天的提交事件
+          EVENTS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/users/${GH_USERNAME}/events?per_page=100")
+          
+          # 检查今天是否有 PushEvent
+          HAS_COMMIT=$(echo "$EVENTS" | jq -r --arg today "$TODAY" \
+            '[.[] | select(.type == "PushEvent" and (.created_at | startswith($today)))] | length')
+          
+          if [ "$HAS_COMMIT" -gt 0 ]; then
+            # 今天有提交，不需要提醒
+            exit 0
+          fi
+          
+          # 没有提交，发送提醒
+          TITLE="GitHub 提醒"
+          BODY="今天还没有提交代码哦，记得保持 commit 习惯！"
+          
+          # URL 编码
+          ENCODED_TITLE=$(echo -n "$TITLE" | jq -sRr @uri)
+          ENCODED_BODY=$(echo -n "$BODY" | jq -sRr @uri)
+          
+          # 发送 Bark 通知
+          BARK_URL="${BARK_SERVER}/${BARK_KEY}/${ENCODED_TITLE}/${ENCODED_BODY}?sound=chime"
+          
+          # 发送请求
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BARK_URL")
+          
+          # 检查响应
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            exit 1
+          fi
+      
+      - name: Done
+        run: echo "Done"

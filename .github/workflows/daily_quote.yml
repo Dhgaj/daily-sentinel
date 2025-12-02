@@ -1,0 +1,80 @@
+# 每日一言 GitHub Action
+# 使用一言 API 每天推送一句名言/动漫台词
+
+name: Daily Quote
+
+# 时间配置说明：
+# 本地时间 09:00 (UTC+8 东八区)
+# UTC 时间 = 本地时间 - 8 = 01:00
+# cron 格式: 分 时 日 月 周
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  # 手动触发（用于测试）
+  workflow_dispatch:
+
+jobs:
+  send-quote:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get Quote and Send Notification
+        run: |
+          # Bark 推送参数
+          BARK_SERVER="${{ secrets.BARK_SERVER }}"
+          BARK_KEY="${{ secrets.BARK_KEY }}"
+          
+          # 设置默认值
+          BARK_SERVER=${BARK_SERVER:-"https://api.day.app"}
+          
+          # 获取一言
+          # 类型: a=动画 b=漫画 c=游戏 d=文学 e=原创 f=网络 g=其他 h=影视 i=诗词 j=网易云 k=哲学 l=抖机灵
+          QUOTE_DATA=$(curl -s "https://v1.hitokoto.cn/?c=d&c=h&c=i&c=k&encode=json")
+          
+          # 检查是否获取成功
+          if [ -z "$QUOTE_DATA" ]; then
+            exit 1
+          fi
+          
+          # 解析数据
+          HITOKOTO=$(echo "$QUOTE_DATA" | jq -r '.hitokoto // empty')
+          FROM=$(echo "$QUOTE_DATA" | jq -r '.from // empty')
+          FROM_WHO=$(echo "$QUOTE_DATA" | jq -r '.from_who // empty')
+          
+          # 检查是否解析成功
+          if [ -z "$HITOKOTO" ]; then
+            exit 1
+          fi
+          
+          # 构建消息
+          TITLE="每日一言"
+          
+          # 构建来源信息
+          if [ -n "$FROM_WHO" ] && [ "$FROM_WHO" != "null" ]; then
+            SOURCE="—— ${FROM_WHO}「${FROM}」"
+          elif [ -n "$FROM" ] && [ "$FROM" != "null" ]; then
+            SOURCE="——「${FROM}」"
+          else
+            SOURCE=""
+          fi
+          
+          BODY="${HITOKOTO} ${SOURCE}"
+          
+          # URL 编码
+          ENCODED_TITLE=$(echo -n "$TITLE" | jq -sRr @uri)
+          ENCODED_BODY=$(echo -n "$BODY" | jq -sRr @uri)
+          
+          # 发送 Bark 通知
+          BARK_URL="${BARK_SERVER}/${BARK_KEY}/${ENCODED_TITLE}/${ENCODED_BODY}?sound=chime"
+          
+          # 发送请求
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BARK_URL")
+          
+          # 检查响应
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            exit 1
+          fi
+      
+      - name: Done
+        run: echo "Done"
